@@ -66,11 +66,7 @@ def main():
     parser.add_argument('-batch_size', type=int, default=128, help='batch size for training, validation or test [default: 128]')
     #EHRmodel
     parser.add_argument('-which_model', type = str, default = 'DRNN',choices= ['RNN','DRNN','QRNN','TLSTM','LR','RETAIN'], help='choose from {"RNN","DRNN","QRNN","TLSTM","LR","RETAIN"}') 
-<<<<<<< HEAD
-    parser.add_argument('-cell_type', type = str, default = 'GRU', choices=['RNN', 'GRU', 'LSTM'], help='For RNN based models, choose from {"RNN", "GRU", "LSTM"}) ## LR removed QRNN and TLSTM 11/6/19
-=======
-    parser.add_argument('-cell_type', type = str, default = 'GRU', choices=['RNN', 'GRU', 'LSTM'], help='For RNN based models, choose from {"RNN", "GRU", "LSTM", "QRNN" (for QRNN model only)}, "TLSTM (for TLSTM model only')
->>>>>>> 6d09f621326c1379fb6a0d7e548e3c7bff452920
+    parser.add_argument('-cell_type', type = str, default = 'GRU', choices=['RNN', 'GRU', 'LSTM'], help='For RNN based models, choose from {"RNN", "GRU", "LSTM"}') ## LR removed QRNN and TLSTM 11/6/19
     parser.add_argument('-input_size', nargs='+', type=int , default = [15817], help='''input dimension(s) separated in space the output will be a list, decide which embedding types to use. 
                         If len of 1, then  1 embedding; len of 3, embedding medical, diagnosis and others separately (3 embeddings) [default:[15817]]''')
     parser.add_argument('-embed_dim', type=int, default=128, help='number of embedding dimension [default: 128]')
