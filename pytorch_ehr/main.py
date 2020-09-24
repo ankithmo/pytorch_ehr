@@ -9,7 +9,7 @@ which is the key input for all the deep learning models in this Repo
 Last revised Feb 20 2020
 
 ankithmo/pytorch_ehr:
-@authors: ankithmo @ Sze-chuan Suen Lab - USC
+@authors: ankithmo @ Sze-chuan Suen Lab - USC ISE
 Last revised Sep 23 2020
 """
 
@@ -47,7 +47,7 @@ try:
 except:
     import pickle
 
-import models as model 
+import models
 from EHRDataloader import EHRdataFromPickles, EHRdataloader  
 import utils as ut 
 from EHREmb import EHREmbeddings
@@ -77,45 +77,45 @@ def main(root_dir='data', files=['toy.train'], test_ratio=0.2, valid_ratio=0.1,
             - batch_size: Batch size for training, validation or test 
                 Default: 128
             - which_model: Choose from {"RNN", "DRNN", "QRNN", "TLSTM", "LR", "RETAIN"}
-            -cell_type: For RNN based models, choose from {"RNN", "GRU", "LSTM"}
-            -input_size: Input dimension(s) separated in space the output will be a list, decide which embedding types to use. 
+            - cell_type: For RNN based models, choose from {"RNN", "GRU", "LSTM"}
+            - input_size: Input dimension(s) separated in space the output will be a list, decide which embedding types to use. 
                         If len of 1, then  1 embedding; len of 3, embedding medical, diagnosis and others separately (3 embeddings)
                 Default: [15817]
-            -embed_dim: Number of embedding dimension
+            - embed_dim: Number of embedding dimension
                 Default: 128
-            -hidden_size: Size of hidden layers 
+            - hidden_size: Size of hidden layers 
                 Default: 128
-            -dropout_r: Probability for dropout
+            - dropout_r: Probability for dropout
                 Default: 0.1
-            -n_layers: Number of Layers, for Dilated RNNs, dilations will increase exponentialy with mumber of layers 
+            - n_layers: Number of Layers, for Dilated RNNs, dilations will increase exponentialy with mumber of layers 
                 Default: 1
-            -bii: Indicator of whether Bi-directin is activated. 
+            - bii: Indicator of whether Bi-directin is activated. 
                 Default: False
-            -time: Indicator of whether time is incorporated into embedding. 
+            - time: Indicator of whether time is incorporated into embedding. 
                 Default: False
-            -preTrainEmb: Path to pretrained embeddings file. 
+            - preTrainEmb: Path to pretrained embeddings file. 
                 Default:''
-            -output_dir: Output directory where the best model will be saved and logs written 
+            - output_dir: Output directory where the best model will be saved and logs written 
                 Default: we will create'../models/'
-            -model_prefix: Prefix name for the saved model e.g: toy.train 
+            - model_prefix: Prefix name for the saved model e.g: toy.train 
                 Default: [(training)file name]
-            -model_customed: Second customed specs of name for the saved model e.g: _RNN_GRU. 
+            - model_customed: Second customed specs of name for the saved model e.g: _RNN_GRU. 
                 Default: none
-            -lr: Learning rate 
+            - lr: Learning rate 
                 Default: 0.01
-            -L2: L2 regularization 
+            - L2: L2 regularization 
                 Default: 0.0001
-            -eps: Term to improve numerical stability 
+            - eps: Term to improve numerical stability 
                 Default: 0.00000001
-            -num_epochs: Number of epochs for training 
+            - num_epochs: Number of epochs for training 
                 Default: 100
-            -patience: Number of stagnant epochs to wait before terminating training 
+            - patience: Number of stagnant epochs to wait before terminating training 
                 Default: 5
-            -optimizer: Select which optimizer to train. Upper/lower case does not matter
+            - optimizer: Select which optimizer to train. Upper/lower case does not matter
                 Default: adam
-            -seed: Seed for reproducibility 
+            - seed: Seed for reproducibility 
                 Default:0
-            -use_cuda: Use GPU 
+            - use_cuda: Use GPU 
                 Default:False
     """
     ###########################################################################
@@ -172,67 +172,66 @@ def main(root_dir='data', files=['toy.train'], test_ratio=0.2, valid_ratio=0.1,
     print(f"\nTraining data contains {len(train)} patients")
     print(f"Validation data contains {len(valid)} patients")
     print(f"Test data contains {len(test)} patients" if test else "No test file provided")
-    
     ###########################################################################
     # 2. Model loading
     ###########################################################################
     print(f"\n{args.which_model} model initialization...", end="")
-    
+    pack_pad = True if which_model == "RNN" else False
     if which_model == 'RNN': 
-        ehr_model = model.EHR_RNN(input_size = input_size, 
+        ehr_model = models.EHR_RNN(input_size = input_size, 
                                   embed_dim = embed_dim, 
                                   hidden_size = hidden_size,
+                                  use_cuda = use_cuda,
                                   n_layers = n_layers,
                                   dropout_r = dropout_r,
                                   cell_type = cell_type,
                                   bii= bii,
                                   time= time,
-                                  preTrainEmb = preTrainEmb) 
-        pack_pad = True
-    elif args.which_model == 'DRNN': 
-        ehr_model = model.EHR_DRNN(input_size = input_size, 
+                                  preTrainEmb = preTrainEmb)
+    elif which_model == 'DRNN': 
+        ehr_model = models.EHR_DRNN(input_size = input_size, 
                                   embed_dim = embed_dim, 
                                   hidden_size = hidden_size,
+                                  use_cuda = use_cuda,
                                   n_layers = n_layers,
                                   dropout_r = dropout_r, #default =0 
                                   cell_type = cell_type, #default ='DRNN'
                                   bii = False,
                                   time = time, 
-                                  preTrainEmb = preTrainEmb)     
-        pack_pad = False
-    elif args.which_model == 'QRNN': 
-        ehr_model = model.EHR_QRNN(input_size = input_size, 
+                                  preTrainEmb = preTrainEmb)
+    elif which_model == 'QRNN': 
+        ehr_model = models.EHR_QRNN(input_size = input_size, 
                                   embed_dim = embed_dim, 
                                   hidden_size = hidden_size,
+                                  use_cuda = use_cuda,
                                   n_layers = n_layers,
                                   dropout_r = dropout_r, #default =0.1
                                   cell_type = 'QRNN', #doesn't support normal cell types
                                   bii = False, #QRNN doesn't support bi
                                   time = time,
-                                  preTrainEmb = preTrainEmb)  
-        pack_pad = False
-    elif args.which_model == 'TLSTM': 
-        ehr_model = model.EHR_TLSTM(input_size = input_size, 
+                                  preTrainEmb = preTrainEmb)
+    elif which_model == 'TLSTM': 
+        ehr_model = models.EHR_TLSTM(input_size = input_size, 
                                   embed_dim = embed_dim, 
                                   hidden_size = hidden_size,
+                                  use_cuda = use_cuda,
                                   n_layers = n_layers,
                                   dropout_r = dropout_r, #default =0.1
                                   cell_type = 'TLSTM', #doesn't support normal cell types
                                   bii = False, 
                                   time = time, 
-                                  preTrainEmb = preTrainEmb)  
-        pack_pad = False
-    elif args.which_model == 'RETAIN': 
-        ehr_model = model.RETAIN(input_size = input_size, 
+                                  preTrainEmb = preTrainEmb)
+    elif which_model == 'RETAIN': 
+        ehr_model = models.RETAIN(input_size = input_size, 
                                   embed_dim = embed_dim, 
                                   hidden_size = hidden_size,
-                                  n_layers = n_layers) 
-        pack_pad = False
+                                  use_cuda = use_cuda,
+                                  n_layers = n_layers)
     else: 
-        ehr_model = model.EHR_LR_emb(input_size = input_size,
+        ehr_model = models.EHR_LR_emb(input_size = input_size,
                                      embed_dim = embed_dim,
+                                     use_cuda = use_cuda,
                                      preTrainEmb = preTrainEmb)
-        pack_pad = False
     print("Done")
     ###########################################################################
     # 3. call dataloader and create a list of minibatches
@@ -240,14 +239,17 @@ def main(root_dir='data', files=['toy.train'], test_ratio=0.2, valid_ratio=0.1,
     # separate loader and minibatches for train, test, validation 
     # Note: mbs stands for minibatches
     print('\nCreating the list of training minibatches')
-    train_mbs = list(tqdm(EHRdataloader(train, batch_size = batch_size, packPadMode = pack_pad)))
+    train_mbs = list(tqdm(EHRdataloader(train, use_cuda = use_cuda, batch_size = batch_size, 
+                                        packPadMode = pack_pad)))
     print('\nCreating the list of valid minibatches')
-    valid_mbs = list(tqdm(EHRdataloader(valid, batch_size = batch_size, packPadMode = pack_pad)))
+    valid_mbs = list(tqdm(EHRdataloader(valid, use_cuda = use_cuda, batch_size = batch_size, 
+                                        packPadMode = pack_pad)))
     print ('\nCreating the list of test minibatches')
-    test_mbs = list(tqdm(EHRdataloader(test, batch_size = batch_size, packPadMode = pack_pad))) if test else None
+    test_mbs = list(tqdm(EHRdataloader(test, use_cuda = use_cuda, batch_size = batch_size, 
+                                        packPadMode = pack_pad))) if test else None
     
     # make sure cuda is working
-    if args.use_cuda:
+    if use_cuda:
         ehr_model = ehr_model.cuda() 
         
     print(f"\n{args.optimizer.title()} optimizer initialization...", end="")
@@ -290,9 +292,8 @@ def main(root_dir='data', files=['toy.train'], test_ratio=0.2, valid_ratio=0.1,
     else:
         raise NotImplementedError
     print("Done")
-    
     ###########################################################################
-    # 3. Train, validation and test. default: batch shuffle = true 
+    # 4. Train, validation and test. default: batch shuffle = true 
     ###########################################################################
     try:
         ut.epochs_run(num_epochs, 

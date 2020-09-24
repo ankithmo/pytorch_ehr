@@ -69,6 +69,10 @@ In the implementation, the medical codes are tokenized with a unified dictionary
 
 The [paper](https://github.com/ZhiGroup/pytorch_ehr/blob/master/Medinfo2019_PA_SimpleRNNisAllweNeed.pdf) upon which this repo was built. 
 
+**Installation**
+After cloning this repository and moving to the directory containing the repository, run the following command:
+`python setup.py install`
+
 **Versions**
 This is Version 0.2, more details in the [release notes](https://github.com/ZhiGroup/pytorch_ehr/releases/tag/v0.2-Feb20)
 

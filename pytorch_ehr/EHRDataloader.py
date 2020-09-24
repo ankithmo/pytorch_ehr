@@ -1,36 +1,41 @@
 # coding: utf-8
 """
+ZhiGroup/pytorch_ehr:
 Created on Mon Oct 29 12:57:40 2018
-
 @authors Jzhu, Lrasmy , Xin128 @ DeguiZhi Lab - UTHealth SBMI
-
 Last updated Feb 20 2020
+
+ankithmo/pytorch_ehr:
+@authors: ankithmo @ Sze-chuan Suen Lab - USC ISE
+Last revised Sep 23 2020
 """
 
 #general utilities
 from __future__ import print_function, division
 from tabulate import tabulate
-import numpy as np
 import random
-import matplotlib.pyplot as plt
 try:
     import cPickle as pickle
 except:
     import pickle
 import warnings
-from torch.autograd import Variable
-import torch.nn.functional as F 
+import os
+import os.path as osp
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+import torch
 import torch.nn as nn
+import torch.nn.functional as F 
+
+from torch.autograd import Variable
+
+from torch.utils.data import Dataset, DataLoader
+
 warnings.filterwarnings("ignore")
 plt.ion()
 
-#torch libraries 
-import torch
-from torch.utils.data import Dataset, DataLoader
-
-import os.path as osp
-
-use_cuda = torch.cuda.is_available()
 
 # Dataset class loaded from pickles
 class EHRdataFromPickles(Dataset):
@@ -43,7 +48,7 @@ class EHRdataFromPickles(Dataset):
             - root_dir (string): Path to pickled file(s).
                                The directory contains the directory to file(s): specify 'file' 
                                please create separate instances from this object if your data is split into train, validation and test files.               
-            - file: data should have the format: pickled, 4 layer of lists, a single patient's history should look at this (use .__getitem__(someindex, seeDescription = True))
+            - file_name: data should have the format: pickled, 4 layer of lists, a single patient's history should look at this (use .__getitem__(someindex, seeDescription = True))
                 [310062,
                  0,
                  [[[0],[7, 364, 8, 30, 10, 240, 20, 212, 209, 5, 167, 153, 15, 3027, 11, 596]],
@@ -53,6 +58,10 @@ class EHRdataFromPickles(Dataset):
                        0: no heart failure
                       [0]: visit time indicator (first one), [7, 364, 8, 30, 10, 240, 20, 212, 209, 5, 167, 153, 15, 3027, 11, 596]: visit codes.         
             - transform (optional): Optional transform to be applied on a sample. Data augmentation related. 
+            - sort: Sort the dataset by patient ID
+                Default: True
+            - model: Choose from {"RNN", "DRNN", "QRNN", "TLSTM", "LR", "RETAIN"}
+                Default: RNN
             - test_ratio: ratio of the dataset to be used for testing
             - valid_ratio: ratio of the dataset to be used for validation
             - seed: seed for reproducibility
@@ -61,15 +70,23 @@ class EHRdataFromPickles(Dataset):
         self.root_dir = root_dir
         self.file_name = file_name
         self.transform = transform
+        self.test_ratio = test_ratio 
+        self.valid_ratio = valid_ratio       
+        self.seed = seed
         self.data = pickle.load(open(osp.join(root_dir, file_name), 'rb'), 
                                 encoding='bytes')
         if sort: 
             self.data.sort(key=lambda pt:len(pt[2]), reverse=True) 
-        self.test_ratio = test_ratio 
-        self.valid_ratio = valid_ratio       
-        self.seed = seed
+        
         
     def __splitdata__(self, sort = True):
+        """
+        Split the dataset by valid and test ratios
+
+        Args:
+            - sort: Sort the dataset by patient ID
+                Default: True
+        """
         random.seed(self.seed)
         random.shuffle(self.data)
         dataSize = len(self.data)
@@ -83,21 +100,29 @@ class EHRdataFromPickles(Dataset):
         
         if sort: 
             #sort train, validation and test again
-            test.sort(key=lambda pt:len(pt[2]),reverse=True) 
-            valid.sort(key=lambda pt:len(pt[2]),reverse=True) 
-            train.sort(key=lambda pt:len(pt[2]),reverse=True)
+            test.sort(key = lambda pt:len(pt[2]), reverse = True)
+            valid.sort(key = lambda pt:len(pt[2]), reverse = True) 
+            train.sort(key = lambda pt:len(pt[2]), reverse = True)
 
         return train, test, valid
         
                                      
     def __getitem__(self, idx, seeDescription = False):
-        '''
-        Return the patient data of index: idx of a 4-layer list 
-        patient_id (pt_sk); 
-        label: 0 for no, 1 for yes; 
-        visit_time: int indicator of the time elapsed from the previous visit, so first visit_time for each patient is always [0];
-        visit_codes: codes for each visit.
-        '''
+        """
+        Get the patient data
+
+        Args:
+            - idx: patient index
+            - seeDescription: want to see descriptions
+
+        Returns:
+            Return the patient data
+            - patient_id (pt_sk); 
+            - label: 0 for no, 1 for yes; 
+            - visit_time: int indicator of the time elapsed from the previous visit, 
+                so first visit_time for each patient is always [0];
+            - visit_codes: codes for each visit.
+        """
         sample = self.data[idx]
         if self.transform:
             sample = self.transform(sample)
@@ -110,10 +135,10 @@ class EHRdataFromPickles(Dataset):
         }
 
         if seeDescription: 
-            '''
+            """
             if this is True:
             You will get a description of what each part of data stands for
-            '''
+            """
             print(tabulate(
                 [
                     ['patient_id', desc['patient_id']], 
@@ -128,9 +153,9 @@ class EHRdataFromPickles(Dataset):
         return sample
 
     def __len__(self):
-        ''' 
-        just the length of data
-        '''
+        """
+        Return the length of the dataset
+        """
         return len(self.data)
 
 
@@ -139,8 +164,8 @@ class EHRdataFromLoadedPickles(Dataset):
     def __init__(self, loaded_list, transform=None, sort = True, model='RNN'):
         """
         Args:
-            1) loaded_list from pickled file
-            2) data should have the format: pickled, 4 layer of lists, a single patient's history should look at this (use .__getitem__(someindex, seeDescription = True))
+            - loaded_list from pickled file
+                data should have the format: pickled, 4 layer of lists, a single patient's history should look at this (use .__getitem__(someindex, seeDescription = True))
                 [310062,
                  0,
                  [[[0],[7, 364, 8, 30, 10, 240, 20, 212, 209, 5, 167, 153, 15, 3027, 11, 596]],
@@ -149,12 +174,12 @@ class EHRdataFromLoadedPickles(Dataset):
                  where 310062: patient id, 
                        0: no heart failure
                       [0]: visit time indicator (first one), [7, 364, 8, 30, 10, 240, 20, 212, 209, 5, 167, 153, 15, 3027, 11, 596]: visit codes.                      
-            3)transform (optional): Optional transform to be applied on a sample. Data augmentation related. 
-            4)test_ratio,  valid_ratio: ratios for splitting the data if needed.
+            - transform (optional): Optional transform to be applied on a sample. Data augmentation related. 
+            - test_ratio,  valid_ratio: ratios for splitting the data if needed.
         """
         self.data = loaded_list 
         if sort: 
-                self.data.sort(key=lambda pt:len(pt[2]),reverse=True) 
+                self.data.sort(key = lambda pt:len(pt[2]), reverse = True) 
         self.transform = transform 
               
                                      
@@ -198,61 +223,63 @@ class EHRdataFromLoadedPickles(Dataset):
     def __len__(self):
         return len(self.data)
             
-def preprocess(batch,pack_pad): 
+def preprocess(batch, pack_pad, use_cuda): 
     # Check cuda availability
     if use_cuda:
-        flt_typ=torch.cuda.FloatTensor
-        lnt_typ=torch.cuda.LongTensor
+        flt_typ = torch.cuda.FloatTensor
+        lnt_typ = torch.cuda.LongTensor
     else: 
-        lnt_typ=torch.LongTensor
-        flt_typ=torch.FloatTensor
-    mb=[]
-    mtd=[]
-    lbt=[]
-    seq_l=[]
-    bsize=len(batch) ## number of patients in minibatch
-    lp= len(max(batch, key=lambda xmb: len(xmb[-1]))[-1]) ## maximum number of visits per patients in minibatch
-    llv=0
+        lnt_typ = torch.LongTensor
+        flt_typ = torch.FloatTensor
+    mb = []
+    mtd = []
+    lbt = []
+    seq_l = []
+    bsize = len(batch) ## number of patients in minibatch
+    lp = len(max(batch, key = lambda xmb: len(xmb[-1]))[-1]) ## maximum number of visits per patients in minibatch
+    llv = 0
     for x in batch:
-        lv= len(max(x[-1], key=lambda xmb: len(xmb[1]))[1])
+        lv = len(max(x[-1], key = lambda xmb: len(xmb[1]))[1])
         if llv < lv:
-            llv=lv     # max number of codes per visit in minibatch        
+            llv = lv     # max number of codes per visit in minibatch        
     for pt in batch:
-        sk,label,ehr_seq_l = pt
-        lpx=len(ehr_seq_l) ## no of visits in pt record
+        sk, label, ehr_seq_l = pt
+        lpx = len(ehr_seq_l) ## no of visits in pt record
         seq_l.append(lpx) 
         lbt.append(Variable(flt_typ([[float(label)]])))
-        ehr_seq_tl=[]
-        time_dim=[]
+        ehr_seq_tl = []
+        time_dim = []
         for ehr_seq in ehr_seq_l:
-            pd=(0, (llv -len(ehr_seq[1])))
-            result = F.pad(torch.from_numpy(np.asarray(ehr_seq[1],dtype=int)).type(lnt_typ),pd,"constant", 0)
+            pd=(0, (llv - len(ehr_seq[1])))
+            result = F.pad(torch.from_numpy(np.asarray(ehr_seq[1], dtype=int)).type(lnt_typ),
+                            pd, "constant", 0)
             ehr_seq_tl.append(result)
-            time_dim.append(Variable(torch.from_numpy(np.asarray(ehr_seq[0],dtype=int)).type(flt_typ)))
+            time_dim.append(Variable(torch.from_numpy(np.asarray(ehr_seq[0], 
+                            dtype=int)).type(flt_typ)))
 
-        ehr_seq_t= Variable(torch.stack(ehr_seq_tl,0)) 
-        lpp= lp-lpx ## diffence between max seq in minibatch and cnt of patient visits 
+        ehr_seq_t = Variable(torch.stack(ehr_seq_tl, 0)) 
+        lpp = lp - lpx ## diffence between max seq in minibatch and cnt of patient visits 
         if pack_pad:
-            zp= nn.ZeroPad2d((0,0,0,lpp)) ## (0,0,0,lpp) when use the pack padded seq and (0,0,lpp,0) otherwise. 
+            zp = nn.ZeroPad2d((0, 0, 0, lpp)) ## (0,0,0,lpp) when use the pack padded seq and (0,0,lpp,0) otherwise. 
         else: 
-            zp= nn.ZeroPad2d((0,0,lpp,0))
-        ehr_seq_t= zp(ehr_seq_t) ## zero pad the visits med codes
+            zp = nn.ZeroPad2d((0, 0, lpp, 0))
+        ehr_seq_t = zp(ehr_seq_t) ## zero pad the visits med codes
         mb.append(ehr_seq_t)
-        time_dim_v= Variable(torch.stack(time_dim,0))
-        time_dim_pv= zp(time_dim_v) ## zero pad the visits time diff codes
+        time_dim_v = Variable(torch.stack(time_dim, 0))
+        time_dim_pv = zp(time_dim_v) ## zero pad the visits time diff codes
         mtd.append(time_dim_pv)
-    lbt_t= Variable(torch.stack(lbt,0))
-    mb_t= Variable(torch.stack(mb,0)) 
+    lbt_t = Variable(torch.stack(lbt, 0))
+    mb_t = Variable(torch.stack(mb, 0)) 
     if use_cuda:
         mb_t.cuda()
         lbt_t.cuda()
-    return mb_t, lbt_t,seq_l, mtd 
+    return mb_t, lbt_t, seq_l, mtd 
             
 
 #customized parts for EHRdataloader
 def my_collate(batch):
-    mb_t, lbt_t,seq_l, mtd = preprocess(batch,pack_pad)
-    return [mb_t, lbt_t,seq_l, mtd]
+    mb_t, lbt_t, seq_l, mtd = preprocess(batch, pack_pad, dl_use_cuda)
+    return [mb_t, lbt_t, seq_l, mtd]
             
 
 def iter_batch2(iterable, samplesize):
@@ -266,18 +293,20 @@ def iter_batch2(iterable, samplesize):
 
 
 class EHRdataloader(DataLoader):
-    def __init__(self, dataset, batch_size=128, shuffle=False, sampler=None, 
-                    batch_sampler=None, num_workers=0, collate_fn=my_collate, 
-                    pin_memory=False, drop_last=False, timeout=0, 
-                    worker_init_fn=None, packPadMode = False): 
-        DataLoader.__init__(self, dataset, batch_size=batch_size, shuffle=False, 
+    def __init__(self, dataset, use_cuda, batch_size=128, shuffle=False, 
+                    sampler=None, batch_sampler=None, num_workers=0, 
+                    collate_fn=my_collate, pin_memory=False, drop_last=False, 
+                    timeout=0, worker_init_fn=None, packPadMode=False): 
+        super(EHRdataloader, self).__init__(dataset, batch_size=batch_size, shuffle=False, 
                             sampler=None, batch_sampler=None, num_workers=0, 
                             collate_fn=my_collate, pin_memory=False, 
                             drop_last=False, timeout=0, worker_init_fn=None)
         self.collate_fn = collate_fn
         global pack_pad
-        pack_pad = packPadMode
+        global dl_use_cuda
 
+        pack_pad = packPadMode
+        dl_use_cuda = use_cuda
 ###############################################################################
 # END 
 ###############################################################################
